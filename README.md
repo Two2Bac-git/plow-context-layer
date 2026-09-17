@@ -70,4 +70,4 @@ no PATH, ele pula e avisa -- nao finge que passou.
 
 ## Licenca
 
-A definir. O `agent-index-client` da Plow e Apache-2.0.
+MIT -- ver `LICENSE`.
