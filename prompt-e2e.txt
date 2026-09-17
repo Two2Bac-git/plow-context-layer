@@ -1,0 +1,7 @@
+Faca exatamente isto e nada mais.
+
+PASSO 1: use a ferramenta Task (ou Agent) para despachar UM subagente, subagent_type general-purpose, com exatamente este prompt entre aspas:
+"Responda com UMA palavra apenas, sem explicacao: PRESENTE se o seu proprio prompt comecar com a marca [camada:rota] ; AUSENTE se nao comecar. Olhe de verdade, nao presuma."
+
+PASSO 2: responda em exatamente uma linha, sem mais nada:
+SUBAGENTE=<a palavra literal que o subagente respondeu>

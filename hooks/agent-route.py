@@ -10,42 +10,51 @@ Por isso este hook reescreve tool_input["prompt"] em vez de emitir
 additionalContext: e a unica das duas portas que atravessa para o subagente.
 
 NUNCA levanta. Hook que quebra BLOQUEIA a chamada da ferramenta -- observado:
-um hook com shebang errado barrou o Agent duas vezes seguidas. Silencio e
-passagem sao o comportamento correto em qualquer erro.
+um hook com shebang errado barrou o Agent duas vezes seguidas.
+
+Sem anotacao de tipo com `|`: PEP 604 e 3.10+, e falha de sintaxe acontece no
+carregamento do modulo, ANTES do try/except do main(), que e justamente o caso
+que a promessa acima nao cobriria. Este arquivo roda em Python 3.6+.
 """
-import json, sys
+import json
+import sys
 
-MARCA = "[camada] contexto roteado para o subagente"
+ALVO = {"Agent", "Task"}          # mesmo padrao do versionado.py do harness
+MARCA_ID = "[camada:rota]"        # sentinela estavel: idempotencia casa por ela,
+CORPO = "contexto roteado para o subagente"   # nao pelo corpo, que e dinamico
 
 
-def rotear(prompt: str) -> str:
-    """Devolve o cabecalho a prepender. Vazio = nao mexe no prompt.
+def rotear(prompt):
+    """Corpo do cabecalho a prepender. Vazio = nao mexe.
 
     ponytail: roteador de verdade entra aqui; hoje so prova a porta.
     """
-    return MARCA if prompt.strip() else ""
+    return CORPO if prompt.strip() else ""
 
 
-def transformar(data: dict) -> dict | None:
-    """(tool_input reescrito) ou None quando nao ha nada a fazer."""
+def transformar(data):
+    """tool_input reescrito, ou None quando nao ha nada a fazer."""
+    if data.get("tool_name") not in ALVO:
+        return None
     ti = data.get("tool_input")
     if not isinstance(ti, dict):
         return None
     prompt = ti.get("prompt")
     if not isinstance(prompt, str) or not prompt:
         return None
-    cabeca = rotear(prompt)
-    if not cabeca or prompt.startswith(cabeca):   # idempotente: nao empilha
+    if prompt.lstrip().startswith(MARCA_ID):   # ja roteado: nao empilha
+        return None
+    corpo = rotear(prompt)
+    if not corpo:
         return None
     novo = dict(ti)
-    novo["prompt"] = f"{cabeca}\n\n{prompt}"
+    novo["prompt"] = "%s %s\n\n%s" % (MARCA_ID, corpo, prompt)
     return novo
 
 
-def main() -> int:
+def main():
     try:
-        data = json.load(sys.stdin)
-        novo = transformar(data)
+        novo = transformar(json.load(sys.stdin))
         if novo is not None:
             print(json.dumps({"hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
@@ -56,7 +65,7 @@ def main() -> int:
     return 0
 
 
-def check() -> int:
+def check():
     ok = True
 
     def diz(nome, cond):
@@ -64,16 +73,40 @@ def check() -> int:
         ok = ok and cond
         print(("  ok    " if cond else "  FALHA ") + nome)
 
-    r = transformar({"tool_input": {"prompt": "X", "subagent_type": "general-purpose"}})
-    diz("prepende a marca", r is not None and r["prompt"].startswith(MARCA))
-    diz("preserva os outros campos", r is not None and r["subagent_type"] == "general-purpose")
+    def entrada(**ti):
+        return {"tool_name": "Agent", "tool_input": ti}
+
+    r = transformar(entrada(prompt="X", subagent_type="general-purpose"))
+    diz("prepende a sentinela", r is not None and r["prompt"].startswith(MARCA_ID))
+    diz("preserva outros campos", r is not None and r["subagent_type"] == "general-purpose")
     diz("mantem o prompt original", r is not None and r["prompt"].endswith("X"))
 
-    diz("idempotente: nao empilha", transformar({"tool_input": {"prompt": r["prompt"]}}) is None)
-    diz("sem prompt -> None", transformar({"tool_input": {"command": "ls"}}) is None)
-    diz("prompt vazio -> None", transformar({"tool_input": {"prompt": ""}}) is None)
-    diz("tool_input ausente -> None", transformar({}) is None)
-    diz("tool_input nao-dict -> None", transformar({"tool_input": "x"}) is None)
+    diz("idempotente: nao empilha", transformar(entrada(prompt=r["prompt"])) is None)
+    diz("idempotente mesmo com corpo diferente",
+        transformar(entrada(prompt=MARCA_ID + " outro corpo\n\nX")) is None)
+    diz("idempotente com espaco antes",
+        transformar(entrada(prompt="  " + MARCA_ID + " x")) is None)
+
+    diz("tool_name errado -> None",
+        transformar({"tool_name": "Bash", "tool_input": {"prompt": "X"}}) is None)
+    diz("tool_name ausente -> None", transformar({"tool_input": {"prompt": "X"}}) is None)
+    diz("Task tambem passa",
+        transformar({"tool_name": "Task", "tool_input": {"prompt": "X"}}) is not None)
+
+    diz("sem prompt -> None", transformar(entrada(command="ls")) is None)
+    diz("prompt vazio -> None", transformar(entrada(prompt="")) is None)
+    diz("prompt so-espaco -> None", transformar(entrada(prompt="   ")) is None)
+    diz("prompt nao-str -> None", transformar(entrada(prompt=123)) is None)
+    diz("tool_input ausente -> None", transformar({"tool_name": "Agent"}) is None)
+    diz("tool_input nao-dict -> None",
+        transformar({"tool_name": "Agent", "tool_input": "x"}) is None)
+
+    # o contrato que a promessa do docstring depende: entrada podre nao levanta
+    try:
+        transformar({"tool_name": "Agent", "tool_input": {"prompt": None}})
+        diz("entrada podre nao levanta", True)
+    except Exception:
+        diz("entrada podre nao levanta", False)
 
     print("PASSOU" if ok else "FALHOU")
     return 0 if ok else 1

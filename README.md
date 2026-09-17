@@ -48,16 +48,26 @@ vale dentro de subagente. Amostra de um plugin -- generalizar exige mais.
   quando ha discordancia fica mudo em concordancia. Afirmar ausencia sem
   controle positivo aceso e como nao ter medido.
 
+## Requisitos
+
+- `python3` 3.6+ (sem anotacao PEP 604, de proposito: falha de sintaxe no
+  carregamento do modulo acontece ANTES do try/except e bloquearia a ferramenta)
+- `claude` no PATH, so para o teste fim-a-fim
+
+Medido: a base `redis:8` (debian) **nao tem python3**. Qualquer imagem que
+carregue esta camada precisa instalar o interpretador -- e o
+`agent_index_client.py` da Plow precisa dele tambem.
+
 ## Verificacao
 
 ```
-python3 hooks/agent-route.py --check     # autoteste, 8 casos
+./reproduzir.sh          # autoteste (16 casos) + fim-a-fim
 ```
 
-Fim-a-fim (o autoteste nao substitui): carregue como plugin efemero com
-`--plugin-dir`, despache um subagente e confirme que a marca chegou no prompt
-dele.
+O fim-a-fim carrega este proprio diretorio via `--plugin-dir`, despacha um
+subagente e confirma que a marca chegou no prompt dele. Se `claude` nao estiver
+no PATH, ele pula e avisa -- nao finge que passou.
 
 ## Licenca
 
-A definir.
+A definir. O `agent-index-client` da Plow e Apache-2.0.
