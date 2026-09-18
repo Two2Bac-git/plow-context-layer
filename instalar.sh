@@ -58,10 +58,16 @@ check)
   else
     echo "  ok    $PREFIX/bin esta no PATH"
   fi
-  python3 "$REPO/hooks/agent-route.py" --check >/dev/null 2>&1 \
-    && echo "  ok    autoteste do hook" || { echo "  FALHA autoteste do hook"; falhou=1; }
-  python3 "$FONTE" --check >/dev/null 2>&1 \
-    && echo "  ok    autoteste do emissor" || { echo "  FALHA autoteste do emissor"; falhou=1; }
+  if python3 "$REPO/hooks/agent-route.py" --check >/dev/null 2>&1; then
+    echo "  ok    autoteste do hook"
+  else
+    echo "  FALHA autoteste do hook"; falhou=1
+  fi
+  if python3 "$FONTE" --check >/dev/null 2>&1; then
+    echo "  ok    autoteste do emissor"
+  else
+    echo "  FALHA autoteste do emissor"; falhou=1
+  fi
   exit $falhou
   ;;
 
