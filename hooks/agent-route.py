@@ -20,16 +20,32 @@ import json
 import sys
 
 ALVO = {"Agent", "Task"}          # mesmo padrao do versionado.py do harness
+TETO_PALAVRAS = 60                # orcamento do contrato; check() falha se estourar
 MARCA_ID = "[camada:rota]"        # sentinela estavel: idempotencia casa por ela,
-CORPO = "contexto roteado para o subagente"   # nao pelo corpo, que e dinamico
+
+# O contrato de comportamento -- a unica coisa que esta camada distribui.
+# Nasce com UMA clausula. O ruleset de quem escreveu a camada nao vem junto:
+# o que viaja e o mecanismo que obriga, nao as regras de ninguem.
+#
+# Curto de proposito: isto entra no prompt de TODO subagente, entao cada
+# palavra aqui e paga N vezes por sessao. O teto e testado em check(), nao
+# anotado num comentario -- comentario com numero apodrece em silencio.
+CONTRATO = (
+    "Contrato desta sessao -- pare antes de destruir. "
+    "Antes de executar qualquer acao que apague, sobrescreva ou mova dados "
+    "(rm, mv, truncate, DROP, git reset --hard, push --force), NAO execute: "
+    "diga o que seria perdido, se e recuperavel, e devolva o comando pronto "
+    "para quem te chamou executar. Vale tambem para os subagentes que voce despachar."
+)
 
 
 def rotear(prompt):
     """Corpo do cabecalho a prepender. Vazio = nao mexe.
 
-    ponytail: roteador de verdade entra aqui; hoje so prova a porta.
+    ponytail: uma clausula. Roteamento por conteudo do prompt entra aqui
+    quando houver mais de uma e valer a pena escolher entre elas.
     """
-    return CORPO if prompt.strip() else ""
+    return CONTRATO if prompt.strip() else ""
 
 
 def transformar(data):
@@ -100,6 +116,12 @@ def check():
     diz("tool_input ausente -> None", transformar({"tool_name": "Agent"}) is None)
     diz("tool_input nao-dict -> None",
         transformar({"tool_name": "Agent", "tool_input": "x"}) is None)
+
+    n = len(CONTRATO.split())
+    diz("contrato cabe no orcamento (%d/%d palavras)" % (n, TETO_PALAVRAS),
+        n <= TETO_PALAVRAS)
+    diz("contrato nomeia a acao que barra", "pare antes de destruir" in CONTRATO.lower())
+    diz("contrato se propaga para netos", "subagentes que voce despachar" in CONTRATO)
 
     # o contrato que a promessa do docstring depende: entrada podre nao levanta
     try:
