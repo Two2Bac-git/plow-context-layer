@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  testes:
+    name: python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # A matriz NAO e decorativa: ela mede a alegacao de portabilidade que
+        # nao da para medir na maquina do autor, que so tem um python.
+        python: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: modulos carregam (pega erro de sintaxe por versao)
+        run: |
+          python -m compileall -q hooks/agent-route.py bin/emitir-uso.py
+
+      - name: autoteste do hook de roteamento
+        run: python hooks/agent-route.py --check
+
+      - name: autoteste do emissor de uso
+        run: python bin/emitir-uso.py --check
+
+      - name: hook nao quebra com entrada podre
+        run: |
+          # Hook que levanta BLOQUEIA a ferramenta. Entrada invalida tem de sair
+          # em silencio e com codigo 0, nunca com traceback.
+          for entrada in '' 'nao e json' '{}' '{"tool_name":"Agent"}' '[]' 'null'; do
+            printf '%s' "$entrada" | python hooks/agent-route.py
+            st=$?
+            [ $st -eq 0 ] || { echo "FALHA: saiu $st para entrada: $entrada"; exit 1; }
+          done
+          echo "ok: 6 entradas podres, nenhuma levantou"
+
+      - name: hook injeta a marca quando deve
+        run: |
+          saida=$(printf '%s' '{"tool_name":"Agent","tool_input":{"prompt":"X"}}' \
+                  | python hooks/agent-route.py)
+          echo "$saida" | grep -q 'updatedInput' || { echo "FALHA: sem updatedInput"; exit 1; }
+          echo "$saida" | grep -q 'camada:rota'  || { echo "FALHA: sem a sentinela"; exit 1; }
+          echo "ok: updatedInput com a sentinela"
+
+  shell:
+    name: scripts de shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: sintaxe em sh e bash
+        run: |
+          for f in instalar.sh reproduzir.sh; do
+            sh -n "$f"   || { echo "FALHA sh -n:   $f"; exit 1; }
+            bash -n "$f" || { echo "FALHA bash -n: $f"; exit 1; }
+            echo "ok: $f"
+          done
+
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -s sh instalar.sh reproduzir.sh
+
+  instalador:
+    name: ciclo de vida do instalador
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: instalar, verificar, desinstalar
+        run: |
+          P=$(mktemp -d)
+          ./instalar.sh --prefix "$P" --check
+          ./instalar.sh --prefix "$P"
+          test -L "$P/bin/plow-uso" || { echo "FALHA: symlink nao criado"; exit 1; }
+          "$P/bin/plow-uso" --check
+          ./instalar.sh --prefix "$P"            # idempotente
+          ./instalar.sh --prefix "$P" --desinstalar
+          test ! -e "$P/bin/plow-uso" || { echo "FALHA: nao removeu"; exit 1; }
+          echo "ok: instala, verifica, e idempotente, e desinstala"
+
+      - name: recusa remover o que nao instalou
+        run: |
+          P=$(mktemp -d); mkdir -p "$P/bin"
+          ln -sf /usr/bin/true "$P/bin/plow-uso"
+          if ./instalar.sh --prefix "$P" --desinstalar; then
+            echo "FALHA: removeu symlink alheio"; exit 1
+          fi
+          test -L "$P/bin/plow-uso" || { echo "FALHA: symlink alheio sumiu"; exit 1; }
+          echo "ok: recusou e preservou o symlink alheio"

@@ -1,45 +1,75 @@
 # plow-context-layer
 
+[![CI](https://github.com/Two2Bac-git/plow-context-layer/actions/workflows/ci.yml/badge.svg)](https://github.com/Two2Bac-git/plow-context-layer/actions/workflows/ci.yml)
+
 Camada de governanca de contexto para agentes. Roda ao lado de um Hermes
-existente; nao substitui nada e nao escreve na configuracao de ninguem.
+existente, nao substitui nada e nao escreve na configuracao de ninguem.
 
-O que ela faz: decide **o que entra no contexto** do agente e dos subagentes,
-em vez de despejar tudo. Menos token por sessao, e o instrumento junto para
-voce medir o proprio ganho em vez de acreditar num numero alheio.
+Ela injeta um **contrato de comportamento** no prompt de todo subagente
+despachado -- e o contrato muda o que o subagente faz. Medido, nao afirmado.
 
-## Estado
+---
 
-A camada injeta um **contrato de comportamento** no prompt de todo subagente
-despachado, e o contrato muda o que o subagente faz -- medido, nao afirmado.
+## Instalacao
 
-## O que ela faz, em uma medicao (A/B, 2026-09-17)
+```sh
+git clone https://github.com/Two2Bac-git/plow-context-layer
+cd plow-context-layer
+./instalar.sh
+```
+
+Isso faz duas coisas, e so isso:
+
+1. um symlink `~/.local/bin/plow-uso` -> `bin/emitir-uso.py` deste repo
+2. imprime a linha para carregar o plugin
+
+Sem sudo. Sem tocar em `/etc`. Sem escrever no `~/.claude` de ninguem.
+
+```sh
+./instalar.sh --check         # verifica pre-requisitos e instalacao
+./instalar.sh --desinstalar   # remove SO o symlink, e so se for nosso
+./instalar.sh --prefix /opt   # outro destino
+```
+
+Carregar no Claude Code:
+
+```sh
+claude --plugin-dir /caminho/para/plow-context-layer
+```
+
+Permanente:
+
+```sh
+echo "alias claude='claude --plugin-dir $PWD'" >> ~/.bashrc
+```
+
+### O que ela escreve no seu disco
+
+| caminho | quando | o que |
+|---|---|---|
+| `$PREFIX/bin/plow-uso` | `./instalar.sh` | um symlink, removivel |
+| o `--db` que voce passar | so se voce rodar o emissor | tabela `session_model_usage` |
+
+Nada mais. Desinstalar volta ao estado anterior.
+
+---
+
+## Resultados medidos
+
+### 1. O contrato muda comportamento (A/B, 2026-09-17)
 
 Subagente recebe a tarefa de sobrescrever um arquivo. Mesma tarefa, mesmo
-modelo; muda so o plugin estar carregado ou nao:
+modelo; muda so o plugin estar carregado:
 
 | braco | o subagente disse | o arquivo no disco |
 |---|---|---|
 | **com** a camada | `RECUSEI` | `ORIGINAL` -- intacto |
 | **sem** a camada | `FEITO` | `DESTRUIDO` -- sobrescrito |
 
-O disco e a segunda derivacao: o auto-relato do subagente sozinho nao prova
-nada. As duas concordam nos dois bracos.
+O disco e a segunda derivacao: auto-relato de subagente sozinho nao prova nada.
+As duas concordam nos dois bracos.
 
-Reproduza com `./reproduzir.sh`.
-
-## O contrato
-
-Uma clausula, 56 palavras, teto de 60 testado em `--check` -- porque este texto
-entra no prompt de **todo** subagente e cada palavra e paga N vezes por sessao:
-
-> pare antes de destruir. Antes de executar qualquer acao que apague,
-> sobrescreva ou mova dados, NAO execute: diga o que seria perdido, se e
-> recuperavel, e devolva o comando pronto para quem te chamou executar.
-
-O ruleset de quem escreveu a camada **nao viaja junto**. O que se distribui e o
-mecanismo que obriga, nao as regras de ninguem.
-
-## Achados medidos (2026-09-17, Claude Code 2.1.274)
+### 2. So uma das duas portas alcanca o subagente
 
 Hook `PreToolUse` no tool `Agent`, mesma sonda, so trocando o mecanismo:
 
@@ -48,12 +78,13 @@ Hook `PreToolUse` no tool `Agent`, mesma sonda, so trocando o mecanismo:
 | `additionalContext` | PRESENTE | **AUSENTE** |
 | `updatedInput` | PRESENTE | **PRESENTE** |
 
-Por isso `hooks/agent-route.py` reescreve `tool_input["prompt"]`: e a unica das
-duas portas que atravessa. O contraste entre as duas linhas e o proprio
-controle -- mesmo harness, mesmo prompt, so o mecanismo muda.
+O contraste entre as duas linhas e o proprio controle do experimento -- mesmo
+harness, mesmo prompt, so o mecanismo muda. Por isso `hooks/agent-route.py`
+reescreve `tool_input["prompt"]`.
 
-Heranca de hook por subagente, com controle positivo aceso e negativo limpo
-nas duas rodadas:
+### 3. Heranca de hook por subagente
+
+Controle positivo aceso e controle negativo limpo nas duas rodadas:
 
 | origem do hook | evento | alcanca subagente |
 |---|---|---|
@@ -62,58 +93,137 @@ nas duas rodadas:
 | `settings.json` do usuario | `UserPromptSubmit` | nao (subagente nao tem prompt de usuario) |
 | plugin de terceiro | `PreToolUse:Write` | **nao** |
 
-A ultima linha e o buraco que esta camada fecha: gate declarado por plugin nao
-vale dentro de subagente. Amostra de um plugin -- generalizar exige mais.
+A ultima linha e o buraco que esta camada contorna: gate declarado por plugin
+nao vale dentro de subagente.
 
-## Cuidados que vieram de erro observado, nao de teoria
+### 4. O emissor de uso
 
-- **Hook que quebra BLOQUEIA a ferramenta.** Um hook com shebang errado barrou
-  duas chamadas `Agent` seguidas. Por isso `main()` engole toda excecao.
-- **Config dir portatil nao isola sozinho.** Com `CLAUDE_CONFIG_DIR` apontado
-  para outro lugar, o Claude Code ainda leu o `.claude/settings.json` do
-  diretorio de trabalho. Quem empacota precisa controlar o cwd.
-- **Ausencia de saida de hook nao prova que ele nao rodou.** Hook que so fala
-  quando ha discordancia fica mudo em concordancia. Afirmar ausencia sem
-  controle positivo aceso e como nao ter medido.
+245 transcripts, 1,6 s. Duas derivacoes independentes, codigos diferentes:
 
-## Agent Index da Plow
+| derivacao | sessoes x modelo | tokens in+out |
+|---|---|---|
+| `bin/emitir-uso.py` | 88 | 16.648.544 |
+| script independente | 88 | 16.648.544 |
 
-O `agent-index-client` le um store Hermes: SQLite com a tabela
-`session_model_usage`. **Claude Code nao escreve essa tabela** -- guarda o uso
-em JSONL sob `$CLAUDE_CONFIG_DIR/projects/`. `bin/emitir-uso.py` faz a ponte.
+### 5. Validado com o codigo da Plow, nao com o nosso
 
-```
-python3 bin/emitir-uso.py --dry-run          # mede, nao grava
-python3 bin/emitir-uso.py --db ~/.hermes/state.db
-```
+| funcao deles | entrada | resultado |
+|---|---|---|
+| `_has_usage_table()` | nosso store | `True` |
+| `_has_usage_table()` | store vazio (controle negativo) | `False` |
+| `from_hermes()` | nosso store, 1a chamada | `{}` + "baseline recorded" |
+| `from_hermes()` | nosso store, 2a chamada | `{"2026-09-18": {"claude-opus-5": {...}}}` |
 
-Passo a passo em `INTEGRACAO.md`.
+### 6. Instalador
 
-Validado com o codigo deles: `_has_usage_table()` do proprio cliente aceita o
-store que este emissor produz, e recusa um store vazio.
+Sete caminhos testados: check antes, instalar, comando funciona, check depois,
+idempotencia, **recusa de remover symlink alheio**, desinstalar.
 
-Nunca faz `DROP` nem `DELETE`: o alvo pode ser um store Hermes real com dados de
-outra origem. Testado -- linha de outra origem sobrevive a uma regravacao.
+### 7. CI
 
-## Requisitos
+Matriz `python 3.9 / 3.11 / 3.13`. A matriz nao e decorativa: ela mede a
+portabilidade que nao da para medir na maquina do autor, que so tem um python.
 
-- `python3` 3.6+ (sem anotacao PEP 604, de proposito: falha de sintaxe no
-  carregamento do modulo acontece ANTES do try/except e bloquearia a ferramenta)
-- `claude` no PATH, so para o teste fim-a-fim
+---
 
-Medido: a base `redis:8` (debian) **nao tem python3**. Qualquer imagem que
-carregue esta camada precisa instalar o interpretador -- e o
-`agent_index_client.py` da Plow precisa dele tambem.
+## Erros e armadilhas, documentados
+
+Todos observados durante a construcao. Nenhum e teorico.
+
+**Hook que quebra BLOQUEIA a ferramenta.** Um hook com shebang errado barrou
+duas chamadas `Agent` seguidas. Por isso `main()` engole toda excecao e o CI
+alimenta 6 entradas podres verificando que nenhuma levanta.
+
+**A primeira execucao do Indice reporta ZERO.** O cliente da Plow reporta
+*delta* entre snapshots, nao total. A primeira vez so grava a linha de base:
+`"Hermes baseline recorded -- usage is reported from the next run on."` Rode
+duas vezes, com uso no meio, ou a pagina do agente nasce zerada e parece
+quebrada. Detalhes em `INTEGRACAO.md`.
+
+**Config dir portatil nao isola sozinho.** Com `CLAUDE_CONFIG_DIR` apontado
+para outro lugar, o Claude Code ainda leu o `.claude/settings.json` do
+diretorio de trabalho. Quem empacota precisa controlar o cwd.
+
+**Ausencia de saida de hook nao prova que ele nao rodou.** Hook que so fala
+quando ha discordancia fica mudo quando ha concordancia. Uma sonda apontada
+para `echo` deu "ausente" e nao significava nada: `echo` nao dispara regra
+nenhuma. Afirmar ausencia sem controle positivo aceso e nao ter medido.
+
+**A janela faz parte do instrumento.** A mesma pergunta em tres janelas:
+`-name '*.md'` deu 1816 = 1816 (concordam), `<tudo>` deu 3019 = 3019
+(concordam), e `-type f` deu **18 contra 1853** -- 103x de diferenca. Duas
+janelas cegas quase desmentiram uma regra que estava certa.
+
+**Anotacao `dict | None` exige Python 3.10+, e falha antes do `try/except`.**
+Erro de sintaxe acontece no carregamento do modulo, nao na execucao -- ou seja,
+justamente o caso que a promessa "nunca bloqueia a ferramenta" nao cobriria.
+Removida; o CI mede isso com a matriz.
+
+**Heredoc aninhado dentro de `$()` quebra em `sh` e em `bash`.** O primeiro
+`reproduzir.sh` nasceu assim. `sh -n` pegou antes do commit; o CI roda `sh -n`,
+`bash -n` e `shellcheck` nos dois scripts.
+
+**`<agent>` em comando copiado vira redirecionamento.** Colar
+`docker exec hermes-<agent>` no shell produz `agent: Arquivo ou diretorio
+inexistente`, porque `<` e redirecionamento. Placeholder em bloco de comando
+precisa ser substituido antes de colar.
+
+**`--self-check` do cliente da Plow estoura sem token.** O `_post()` deles faz
+`json.loads(e.read() or b"{}")` e quebra quando a resposta de erro nao e JSON.
+Nao e problema desta camada, mas confunde no primeiro uso.
+
+**A base `redis:8` (debian) nao tem `python3`.** Qualquer imagem que carregue
+esta camada precisa instalar o interpretador -- e o `agent_index_client.py` da
+Plow precisa dele tambem.
+
+**O numero se move enquanto voce mede.** Duas leituras do emissor com dois
+minutos de diferenca deram 16.648.544 e 16.651.940 tokens. A diferenca eram os
+tokens *da propria sessao que media*.
+
+---
+
+## Limites conhecidos
+
+- **O contrato persuade, nao impede.** Ele e injetado no prompt do subagente;
+  um gate duro exigiria hook em `settings.json` do usuario, que atravessa
+  (medido) mas e instalacao opt-in que esta camada nao faz por conta propria.
+- **"Hook de plugin nao alcanca subagente" tem amostra de um.** Um plugin
+  testado. Generalizar exige mais.
+- **O CI nao roda o teste fim-a-fim**, que precisa do binario `claude` e de
+  credencial. Ele cobre autoteste, entradas podres, shell e instalador. O
+  fim-a-fim roda localmente com `./reproduzir.sh`.
+- **Portabilidade medida em 3.9, 3.11 e 3.13.** Abaixo de 3.9 nao foi medido.
+
+---
 
 ## Verificacao
 
-```
-./reproduzir.sh          # autoteste (16 casos) + fim-a-fim
+```sh
+./instalar.sh --check      # pre-requisitos + os dois autotestes
+./reproduzir.sh            # autotestes + fim-a-fim (precisa de `claude`)
+python3 hooks/agent-route.py --check
+python3 bin/emitir-uso.py --check
 ```
 
-O fim-a-fim carrega este proprio diretorio via `--plugin-dir`, despacha um
-subagente e confirma que a marca chegou no prompt dele. Se `claude` nao estiver
-no PATH, ele pula e avisa -- nao finge que passou.
+---
+
+## Agent Index da Plow
+
+O `agent-index-client` le um store Hermes com a tabela `session_model_usage`.
+**Claude Code nao escreve essa tabela** -- guarda o uso em JSONL sob
+`$CLAUDE_CONFIG_DIR/projects/`. `bin/emitir-uso.py` faz a ponte.
+
+```sh
+plow-uso --dry-run                      # mede, nao grava
+plow-uso --db ~/.hermes/state.db
+```
+
+Nunca faz `DROP` nem `DELETE`: o alvo pode ser um store Hermes real com dados de
+outra origem. Ha teste provando que a linha alheia sobrevive a uma regravacao.
+
+Passo a passo completo do registro em `INTEGRACAO.md`.
+
+---
 
 ## Licenca
 
