@@ -87,6 +87,8 @@ python3 bin/emitir-uso.py --dry-run          # mede, nao grava
 python3 bin/emitir-uso.py --db ~/.hermes/state.db
 ```
 
+Passo a passo em `INTEGRACAO.md`.
+
 Validado com o codigo deles: `_has_usage_table()` do proprio cliente aceita o
 store que este emissor produz, e recusa um store vazio.
 
