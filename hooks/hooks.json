@@ -6,6 +6,12 @@
     "hooks": [
      { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/agent-route.py\"", "timeout": 10 }
     ]
+   },
+   {
+    "matcher": "Bash",
+    "hooks": [
+     { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-destrutivo.py\"", "timeout": 10 }
+    ]
    }
   ]
  }

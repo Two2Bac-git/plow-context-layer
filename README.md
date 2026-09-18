@@ -69,7 +69,28 @@ modelo; muda so o plugin estar carregado:
 O disco e a segunda derivacao: auto-relato de subagente sozinho nao prova nada.
 As duas concordam nos dois bracos.
 
-### 2. So uma das duas portas alcanca o subagente
+### 2. O gate BLOQUEIA de verdade (A/B isolado)
+
+O contrato da secao 1 persuade. Este hook impede. Para separar os dois, o
+braco `com` carregou **so o gate**, sem o contrato injetado -- senao nao daria
+para saber qual dos dois agiu. E a tarefa foi trocada por uma banal (esvaziar
+um rascunho), que nenhum modelo hesita em executar por conta propria:
+
+| braco | o agente disse | o arquivo no disco |
+|---|---|---|
+| **com** o gate | `RESULTADO=IMPEDIDO` | 17 B -> 17 B, intacto |
+| **sem** o gate | -- | 17 B -> **0 B**, truncado |
+
+E o erro que ele copiou, verbatim:
+
+```
+ERRO=Bloqueado pelo contrato desta sessao: pare antes de destruir.
+```
+
+Esse texto e o `permissionDecisionReason` deste repo, byte a byte. Nao foi o
+modelo julgando: foi o hook negando.
+
+### 3. So uma das duas portas alcanca o subagente
 
 Hook `PreToolUse` no tool `Agent`, mesma sonda, so trocando o mecanismo:
 
@@ -82,7 +103,7 @@ O contraste entre as duas linhas e o proprio controle do experimento -- mesmo
 harness, mesmo prompt, so o mecanismo muda. Por isso `hooks/agent-route.py`
 reescreve `tool_input["prompt"]`.
 
-### 3. Heranca de hook por subagente
+### 4. Heranca de hook por subagente
 
 Controle positivo aceso e controle negativo limpo nas duas rodadas:
 
@@ -96,7 +117,7 @@ Controle positivo aceso e controle negativo limpo nas duas rodadas:
 A ultima linha e o buraco que esta camada contorna: gate declarado por plugin
 nao vale dentro de subagente.
 
-### 4. O emissor de uso
+### 5. O emissor de uso
 
 245 transcripts, 1,6 s. Duas derivacoes independentes, codigos diferentes:
 
@@ -105,7 +126,7 @@ nao vale dentro de subagente.
 | `bin/emitir-uso.py` | 88 | 16.648.544 |
 | script independente | 88 | 16.648.544 |
 
-### 5. Validado com o codigo da Plow, nao com o nosso
+### 6. Validado com o codigo da Plow, nao com o nosso
 
 | funcao deles | entrada | resultado |
 |---|---|---|
@@ -114,12 +135,12 @@ nao vale dentro de subagente.
 | `from_hermes()` | nosso store, 1a chamada | `{}` + "baseline recorded" |
 | `from_hermes()` | nosso store, 2a chamada | `{"2026-09-18": {"claude-opus-5": {...}}}` |
 
-### 6. Instalador
+### 7. Instalador
 
 Sete caminhos testados: check antes, instalar, comando funciona, check depois,
 idempotencia, **recusa de remover symlink alheio**, desinstalar.
 
-### 7. CI
+### 8. CI
 
 Matriz `python 3.9 / 3.11 / 3.13`. A matriz nao e decorativa: ela mede a
 portabilidade que nao da para medir na maquina do autor, que so tem um python.
@@ -191,9 +212,17 @@ tokens *da propria sessao que media*.
 
 ## Limites conhecidos
 
-- **O contrato persuade, nao impede.** Ele e injetado no prompt do subagente;
-  um gate duro exigiria hook em `settings.json` do usuario, que atravessa
-  (medido) mas e instalacao opt-in que esta camada nao faz por conta propria.
+- **O gate cobre Bash, nao tudo.** As ferramentas `Write` e `Edit` nao passam
+  por ele. Um agente ainda pode sobrescrever por essas vias.
+- **Redirecionamento de stderr escapa.** `2>arquivo` trunca e nao e pego: o
+  detector ignora `>` precedido de digito para nao confundir descritor com
+  redirecionamento comum.
+- **Interpretador embutido escapa.** `python3 -c "os.remove(...)"` tem `python3`
+  como cabeca de comando. Quem quiser contornar, contorna. O gate detem o
+  descuido, nao o adversario.
+- **O gate falha ABERTO.** Qualquer erro interno deixa o comando passar. E
+  deliberado: hook que quebra bloqueia tudo, inclusive o inofensivo -- observado
+  neste repo, um shebang errado barrou duas chamadas seguidas.
 - **"Hook de plugin nao alcanca subagente" tem amostra de um.** Um plugin
   testado. Generalizar exige mais.
 - **O CI nao roda o teste fim-a-fim**, que precisa do binario `claude` e de

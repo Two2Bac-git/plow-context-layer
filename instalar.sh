@@ -68,6 +68,11 @@ check)
   else
     echo "  FALHA autoteste do emissor"; falhou=1
   fi
+  if python3 "$REPO/hooks/gate-destrutivo.py" --check >/dev/null 2>&1; then
+    echo "  ok    autoteste do gate destrutivo"
+  else
+    echo "  FALHA autoteste do gate destrutivo"; falhou=1
+  fi
   if python3 "$REPO/bin/preflight.py" --check >/dev/null 2>&1; then
     echo "  ok    autoteste do preflight"
   else

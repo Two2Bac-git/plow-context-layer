@@ -25,13 +25,31 @@ jobs:
 
       - name: modulos carregam (pega erro de sintaxe por versao)
         run: |
-          python -m compileall -q hooks/agent-route.py bin/emitir-uso.py
+          python -m compileall -q hooks/agent-route.py hooks/gate-destrutivo.py bin/emitir-uso.py bin/preflight.py
 
       - name: autoteste do hook de roteamento
         run: python hooks/agent-route.py --check
 
       - name: autoteste do emissor de uso
         run: python bin/emitir-uso.py --check
+
+      - name: autoteste do gate destrutivo
+        run: python hooks/gate-destrutivo.py --check
+
+      - name: gate emite deny para comando destrutivo
+        run: |
+          saida=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/x"}}' \
+                  | python hooks/gate-destrutivo.py)
+          echo "$saida" | grep -q '"permissionDecision": *"deny"' \
+            || { echo "FALHA: nao negou"; exit 1; }
+          echo "ok: deny emitido"
+
+      - name: gate deixa passar comando inofensivo
+        run: |
+          saida=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls -la"}}' \
+                  | python hooks/gate-destrutivo.py)
+          [ -z "$saida" ] || { echo "FALHA: bloqueou 'ls'"; exit 1; }
+          echo "ok: silencio no inofensivo"
 
       - name: autoteste do preflight
         run: python bin/preflight.py --check
