@@ -172,6 +172,13 @@ precisa ser substituido antes de colar.
 `json.loads(e.read() or b"{}")` e quebra quando a resposta de erro nao e JSON.
 Nao e problema desta camada, mas confunde no primeiro uso.
 
+**Placeholder colado vira credencial invalida, e o erro nao diz isso.** O
+bloco de comandos deste repo foi colado inteiro, com `export
+PLOW_AGENT_TOKEN=...`, e a Plow devolveu `could not get Plow assertion: 401` --
+que nao distingue "token errado" de "token placeholder". Corrigido na origem:
+`INTEGRACAO.md` agora usa `read -rsp`, que pede o valor e nao ecoa, e
+`bin/preflight.py` classifica o token antes de qualquer chamada.
+
 **A base `redis:8` (debian) nao tem `python3`.** Qualquer imagem que carregue
 esta camada precisa instalar o interpretador -- e o `agent_index_client.py` da
 Plow precisa dele tambem.
@@ -216,6 +223,7 @@ O `agent-index-client` le um store Hermes com a tabela `session_model_usage`.
 ```sh
 plow-uso --dry-run                      # mede, nao grava
 plow-uso --db ~/.hermes/state.db
+python3 bin/preflight.py                # confere store + token ANTES de registrar
 ```
 
 Nunca faz `DROP` nem `DELETE`: o alvo pode ser um store Hermes real com dados de

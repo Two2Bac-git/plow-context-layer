@@ -15,8 +15,12 @@ curl -O https://raw.githubusercontent.com/plow-pbc/agent-index-client/main/stand
 python3 bin/emitir-uso.py --dry-run                     # confere antes
 python3 bin/emitir-uso.py --db ~/.hermes/state.db
 
-# 3. credencial (nunca commitar, nunca assar em imagem)
-export PLOW_AGENT_TOKEN=...
+# 3. credencial: o prompt NAO ecoa e nao entra no historico do shell.
+#    Nao ha placeholder para colar errado -- ele pede o valor.
+read -rsp 'cole o token da Plow: ' PLOW_AGENT_TOKEN; export PLOW_AGENT_TOKEN; echo
+
+# 3b. confira ANTES de registrar: store, formato do token e aceitacao pela Plow
+python3 bin/preflight.py
 
 # 4. registrar a pagina publica do agente
 python3 agent_index_client.py --register --agent plow-context-layer \
@@ -63,6 +67,23 @@ O docstring de `state_dir()` deles explica por que a identidade do install mora
 no volume e nao no HOME: container recriado tem HOME novo e mintaria um segundo
 id, orfanando o que o primeiro escreveu. A imagem oficial da Plow resolve com
 `HERMES_HOME=/opt/data` num volume que o container guarda.
+
+## 401 "could not get Plow assertion"
+
+Aconteceu de verdade aqui. O bloco acima foi colado inteiro, **com o
+placeholder**, entao `PLOW_AGENT_TOKEN` virou a string `...`. O cliente mandou
+isso como credencial e a Plow devolveu 401 -- que nao diz "seu token e um
+placeholder", diz apenas o codigo.
+
+Diferencie assim:
+
+| mensagem | significa |
+|---|---|
+| `no PLOW_AGENT_TOKEN in the environment` | a variavel nao existe |
+| `could not get Plow assertion: 401` | a variavel existe e foi **recusada** |
+
+`python3 bin/preflight.py` separa os dois casos antes de voce gastar a chamada,
+e nunca imprime o token -- so o comprimento e o veredito.
 
 ## Gotcha observado
 

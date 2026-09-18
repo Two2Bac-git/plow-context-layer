@@ -68,6 +68,11 @@ check)
   else
     echo "  FALHA autoteste do emissor"; falhou=1
   fi
+  if python3 "$REPO/bin/preflight.py" --check >/dev/null 2>&1; then
+    echo "  ok    autoteste do preflight"
+  else
+    echo "  FALHA autoteste do preflight"; falhou=1
+  fi
   exit $falhou
   ;;
 

@@ -33,6 +33,18 @@ jobs:
       - name: autoteste do emissor de uso
         run: python bin/emitir-uso.py --check
 
+      - name: autoteste do preflight
+        run: python bin/preflight.py --check
+
+      - name: preflight detecta o placeholder sem tocar a rede
+        run: |
+          # O erro real que motivou o preflight: bloco colado com o placeholder.
+          # --offline garante que o CI nao depende da API da Plow estar de pe.
+          if PLOW_AGENT_TOKEN='...' python bin/preflight.py --offline; then
+            echo "FALHA: preflight aceitou um placeholder"; exit 1
+          fi
+          echo "ok: placeholder recusado"
+
       - name: hook nao quebra com entrada podre
         run: |
           # Hook que levanta BLOQUEIA a ferramenta. Entrada invalida tem de sair
