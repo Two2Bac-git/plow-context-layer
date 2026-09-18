@@ -76,6 +76,23 @@ vale dentro de subagente. Amostra de um plugin -- generalizar exige mais.
   quando ha discordancia fica mudo em concordancia. Afirmar ausencia sem
   controle positivo aceso e como nao ter medido.
 
+## Agent Index da Plow
+
+O `agent-index-client` le um store Hermes: SQLite com a tabela
+`session_model_usage`. **Claude Code nao escreve essa tabela** -- guarda o uso
+em JSONL sob `$CLAUDE_CONFIG_DIR/projects/`. `bin/emitir-uso.py` faz a ponte.
+
+```
+python3 bin/emitir-uso.py --dry-run          # mede, nao grava
+python3 bin/emitir-uso.py --db ~/.hermes/state.db
+```
+
+Validado com o codigo deles: `_has_usage_table()` do proprio cliente aceita o
+store que este emissor produz, e recusa um store vazio.
+
+Nunca faz `DROP` nem `DELETE`: o alvo pode ser um store Hermes real com dados de
+outra origem. Testado -- linha de outra origem sobrevive a uma regravacao.
+
 ## Requisitos
 
 - `python3` 3.6+ (sem anotacao PEP 604, de proposito: falha de sintaxe no
