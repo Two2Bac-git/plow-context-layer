@@ -31,6 +31,29 @@ python3 agent_index_client.py --agent plow-context-layer
 python3 agent_index_client.py status
 ```
 
+## A PRIMEIRA execucao reporta ZERO -- isso e normal
+
+Medido com a funcao deles (`from_hermes`) sobre um store nosso:
+
+```
+1a chamada: "Hermes baseline recorded - usage is reported from the next run on."
+            devolveu {}
+2a chamada: {"2026-09-18": {"claude-opus-5": {"input": 78, "output": 44529,
+             "cache_read": 13140181, "cache_write": 1129730}}}
+```
+
+O cliente reporta **delta** entre snapshots, nao total. A primeira vez so grava
+a linha de base. Rode o emissor e o report **duas vezes**, com uso real no meio,
+ou a pagina do agente nasce zerada e parece quebrada.
+
+```sh
+python3 bin/emitir-uso.py --db ~/.hermes/state.db
+python3 agent_index_client.py --agent plow-context-layer      # grava baseline, reporta 0
+#   ... use o agente normalmente ...
+python3 bin/emitir-uso.py --db ~/.hermes/state.db
+python3 agent_index_client.py --agent plow-context-layer      # agora sai numero
+```
+
 ## Onde o cliente escreve
 
 `$HERMES_HOME/.agent-index/` ou `~/.agent-index/` -- `token` e
