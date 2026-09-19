@@ -200,6 +200,21 @@ que nao distingue "token errado" de "token placeholder". Corrigido na origem:
 `INTEGRACAO.md` agora usa `read -rsp`, que pede o valor e nao ecoa, e
 `bin/preflight.py` classifica o token antes de qualquer chamada.
 
+**Duas fontes de uso coincidentes SOMAM, nao competem.** O
+`agent_index_client` coleta de `agentsview` e do store Hermes, e o `merge()`
+dele documenta: *"Same (day, model) from two collectors adds up rather than one
+winning."* Se `agentsview` estiver instalado, ele ja reporta Claude Code -- e o
+emissor deste repo, que escreve Claude Code no store Hermes, faria a mesma
+sessao contar duas vezes. Medido com a funcao deles: 100 -> 200, **fator 2.0x**.
+`bin/emitir-uso.py` agora **recusa gravar** se encontrar `agentsview` nos tres
+caminhos que o proprio cliente procura; `--mesmo-com-agentsview` e a saida
+explicita para quem sabe que nao ha sobreposicao.
+
+**Default ligado no `def` nao enxerga quem troca a constante depois.** O
+primeiro teste da guarda acima passou verde sem exercitar nada, porque
+`def f(x=CONSTANTE)` congela o valor na definicao. A resolucao virou tardia
+(`x=None` e `x or CONSTANTE`) e so entao o teste falhou como devia.
+
 **A base `redis:8` (debian) nao tem `python3`.** Qualquer imagem que carregue
 esta camada precisa instalar o interpretador -- e o `agent_index_client.py` da
 Plow precisa dele tambem.

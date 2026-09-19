@@ -37,6 +37,27 @@ CAMPOS = (("input_tokens", "input_tokens"),
           ("cache_creation_input_tokens", "cache_write_tokens"))
 IGNORAR = {"<synthetic>"}          # nao e modelo; aparece nos transcripts
 
+# Os MESMOS tres caminhos que o agent_index_client procura (from_agentsview).
+# Se o agentsview existe, ELE ja reporta o uso de Claude Code -- e o merge()
+# do cliente SOMA fontes que coincidem, em vez de uma vencer. Medido com a
+# funcao deles: 100 -> 200, fator 2.0x. Publicar dobrado num placar de
+# contagem honesta e pior do que nao publicar.
+AGENTSVIEW_PATHS = (
+    os.path.expanduser("~/.local/bin/agentsview"),
+    "/opt/homebrew/bin/agentsview",
+    "/usr/local/bin/agentsview",
+)
+
+
+def agentsview_instalado(caminhos=None):
+    """Caminho do agentsview, ou None. Mesma busca que o cliente da Plow faz.
+
+    `caminhos=None` e resolvido na CHAMADA, nao na definicao: default mutavel
+    ligado no `def` nao enxerga quem troca a constante depois, e foi assim que
+    o primeiro teste desta guarda passou verde sem exercitar nada.
+    """
+    return next((c for c in (caminhos or AGENTSVIEW_PATHS) if os.path.exists(c)), None)
+
 
 def linhas_de_uso(caminho):
     """(session_id, model, {coluna: int}) por registro com usage."""
@@ -119,7 +140,21 @@ def main(argv):
         help="store Hermes que o agent-index-client vai ler")
     ap.add_argument("--dry-run", action="store_true",
                     help="mede e mostra, sem gravar nada")
+    ap.add_argument("--mesmo-com-agentsview", action="store_true",
+                    help="grava mesmo se o agentsview existir (aceita o risco "
+                         "de contagem dupla; so faz sentido se o agentsview "
+                         "nao cobrir estas sessoes)")
     a = ap.parse_args(argv)
+
+    av = agentsview_instalado()
+    if av and not a.dry_run and not a.mesmo_com_agentsview:
+        print("RECUSADO: agentsview instalado em %s\n"
+              "  Ele ja reporta o uso de Claude Code, e o merge() do cliente da\n"
+              "  Plow SOMA fontes coincidentes em vez de escolher uma: o mesmo\n"
+              "  (dia, modelo) sairia com o dobro. Medido, fator 2.0x.\n"
+              "  Se ainda assim quiser gravar: --mesmo-com-agentsview" % av,
+              file=sys.stderr)
+        return 2
 
     if not os.path.isdir(a.projects):
         print("nada a fazer: %s nao existe" % a.projects, file=sys.stderr)
@@ -202,6 +237,17 @@ def check():
 
         diz("projects inexistente devolve 1, nao levanta",
             main(["--projects", os.path.join(td, "nao-existe")]) == 1)
+
+        # guarda de contagem dupla
+        falso = os.path.join(td, "agentsview")
+        diz("agentsview ausente e detectado como None",
+            agentsview_instalado((falso,)) is None)
+        open(falso, "w").close()
+        diz("agentsview presente e detectado",
+            agentsview_instalado((falso,)) == falso)
+        diz("detector usa os 3 caminhos do cliente da Plow",
+            len(AGENTSVIEW_PATHS) == 3
+            and any(c.endswith("/.local/bin/agentsview") for c in AGENTSVIEW_PATHS))
 
     print("PASSOU" if ok else "FALHOU")
     return 0 if ok else 1

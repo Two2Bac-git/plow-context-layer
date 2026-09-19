@@ -52,9 +52,10 @@ def checar_store(db):
 def classificar_token(tok):
     """(estado, mensagem) sem revelar o valor. Nao toca na rede."""
     if tok is None:
-        return "ausente", ("PLOW_AGENT_TOKEN nao esta no ambiente.\n"
-                           "      Dentro de um container da Plow ele ja vem pronto.\n"
-                           "      Fora dele, peca o token que a Plow cunhou para o seu agente.")
+        return "ausente", ("PLOW_AGENT_TOKEN nao esta no ambiente. Para obter:\n"
+                           "        plow-agents login\n"
+                           "        export PLOW_AGENT_TOKEN=$(cat ~/.config/plow/token)\n"
+                           "      Dentro de um container da Plow ele ja vem pronto.")
     if not tok.strip():
         return "vazio", "PLOW_AGENT_TOKEN esta definida mas vazia."
     if tok.strip() in PLACEHOLDERS or tok.strip().strip("<>") in PLACEHOLDERS:
@@ -95,6 +96,18 @@ def main(argv):
     a = ap.parse_args(argv)
 
     falhou = 0
+
+    av = next((c for c in (os.path.expanduser("~/.local/bin/agentsview"),
+                           "/opt/homebrew/bin/agentsview",
+                           "/usr/local/bin/agentsview") if os.path.exists(c)), None)
+    if av:
+        print("  FALHA agentsview instalado em %s -- ele ja reporta Claude Code,\n"
+              "        e o merge() do cliente SOMA fontes coincidentes (2.0x medido).\n"
+              "        Nao alimente o store Hermes com as mesmas sessoes." % av)
+        falhou = 1
+    else:
+        print("  ok    agentsview ausente: o store Hermes e a unica fonte, sem "
+              "risco de contagem dupla")
 
     ok, msg = checar_store(a.db)
     print(("  ok    " if ok else "  FALHA ") + msg)
