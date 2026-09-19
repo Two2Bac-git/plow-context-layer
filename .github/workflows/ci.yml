@@ -56,11 +56,16 @@ jobs:
           # Sem a guarda o mesmo (dia, modelo) sai dobrado: o merge() do
           # cliente da Plow soma fontes coincidentes, medido em 2.0x.
           mkdir -p "$HOME/.local/bin" && : > "$HOME/.local/bin/agentsview"
-          if python bin/emitir-uso.py --db /tmp/naodeve.db; then
+          # Fixture propria: o runner nao tem ~/.claude/projects, e sem uma raiz
+          # de transcripts o emissor sai 1 por outro motivo -- que foi o que
+          # reprovou a primeira versao deste passo.
+          P=$(mktemp -d); mkdir -p "$P/proj"
+          printf '%s\n' '{"sessionId":"S1","message":{"model":"m1","usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}' > "$P/proj/s.jsonl"
+          if python bin/emitir-uso.py --projects "$P" --db /tmp/naodeve.db; then
             echo "FALHA: gravou mesmo com agentsview presente"; exit 1
           fi
           test ! -f /tmp/naodeve.db || { echo "FALHA: criou o store"; exit 1; }
-          python bin/emitir-uso.py --dry-run --mesmo-com-agentsview >/dev/null \
+          python bin/emitir-uso.py --projects "$P" --dry-run --mesmo-com-agentsview >/dev/null \
             || { echo "FALHA: override nao funcionou"; exit 1; }
           echo "ok: recusou, e o override continua disponivel"
 
