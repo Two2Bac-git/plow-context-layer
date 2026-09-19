@@ -53,6 +53,13 @@ check)
   else
     echo "  ---   nao instalado ainda: $ALVO"
   fi
+  if [ -f "$PWD/.claude/settings.json" ]; then
+    echo "  aviso ha .claude/settings.json neste diretorio: o Claude Code o carrega"
+    echo "        como configuracao de projeto, alem da sua. Rode a camada a"
+    echo "        partir de um diretorio sem ele se quiser isolamento."
+  else
+    echo "  ok    nenhum .claude/settings.json no diretorio atual"
+  fi
   if no_path; then
     echo "  aviso $PREFIX/bin NAO esta no PATH"
   else

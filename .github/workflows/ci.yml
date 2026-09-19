@@ -69,6 +69,37 @@ jobs:
             || { echo "FALHA: override nao funcionou"; exit 1; }
           echo "ok: recusou, e o override continua disponivel"
 
+      - name: gate cobre a ferramenta Write
+        run: |
+          # Arquivo que existe: sobrescrever troca o conteudo inteiro.
+          printf 'x' > /tmp/existe.txt
+          s=$(printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"/tmp/existe.txt"}}' \
+              | python hooks/gate-destrutivo.py)
+          echo "$s" | grep -q '"permissionDecision": *"deny"' \
+            || { echo "FALHA: Write sobre arquivo existente passou"; exit 1; }
+          # Arquivo novo nao destroi nada.
+          s=$(printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"/tmp/nao-existe-xyz"}}' \
+              | python hooks/gate-destrutivo.py)
+          [ -z "$s" ] || { echo "FALHA: barrou criacao de arquivo novo"; exit 1; }
+          echo "ok: Write coberto, criacao livre"
+
+      - name: modo fechado barra quando nao consegue decidir
+        run: |
+          s=$(printf 'lixo-nao-json' | python hooks/gate-destrutivo.py)
+          [ -z "$s" ] || { echo "FALHA: padrao deveria falhar ABERTO"; exit 1; }
+          s=$(printf 'lixo-nao-json' | PLOW_GATE_MODO=fechado python hooks/gate-destrutivo.py)
+          echo "$s" | grep -q '"permissionDecision": *"deny"' \
+            || { echo "FALHA: modo fechado nao barrou"; exit 1; }
+          echo "ok: aberto por padrao, fechado por escolha"
+
+      - name: usuario controla a lista, e --explicar responde
+        run: |
+          PLOW_GATE_EXTRA=curl python hooks/gate-destrutivo.py --explicar "curl http://x" \
+            && { echo "FALHA: extra nao bloqueou"; exit 1; }
+          PLOW_GATE_PERMITIR=rm python hooks/gate-destrutivo.py --explicar "rm -rf /x" \
+            || { echo "FALHA: permitir nao liberou"; exit 1; }
+          echo "ok: extra bloqueia, permitir libera, --explicar informa"
+
       - name: autoteste do preflight
         run: python bin/preflight.py --check
 

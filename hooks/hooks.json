@@ -4,13 +4,21 @@
    {
     "matcher": "Agent|Task",
     "hooks": [
-     { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/agent-route.py\"", "timeout": 10 }
+     {
+      "type": "command",
+      "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/agent-route.py\"",
+      "timeout": 10
+     }
     ]
    },
    {
-    "matcher": "Bash",
+    "matcher": "Bash|Write",
     "hooks": [
-     { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-destrutivo.py\"", "timeout": 10 }
+     {
+      "type": "command",
+      "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-destrutivo.py\"",
+      "timeout": 10
+     }
     ]
    }
   ]
